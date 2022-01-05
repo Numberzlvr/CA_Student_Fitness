@@ -1,0 +1,197 @@
+---
+title: "An Investigation of Student Fitness in California"
+author: "C. Campbell"
+date: "11/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+The data for this investigation was obtained from the CA Dept of Education (CDE) website.  Each school year, CDE tests the physical fitness of students in the 5th, 7th, and 9th grades.  
+
+According to their website:
+"The test has six parts that show a level of fitness that offer a degree of defense against diseases that come from inactivity. The test results can be used by students, teachers, and parents."
+
+However, what does this data really tell the students, teachers, and parents?  How can this be used to improve fitness and health?  That is the main focus of this investigation.
+
+## Exploring the Data
+
+First, install the packages that will help with data exploration and manipulation.
+
+```{r}
+install.packages(c("ggplot2", "tidyverse", "dplyr", "tidyr", "readr", "purrr"))
+
+```
+
+```{r}
+library("ggplot2")
+library("tidyverse")
+library("dplyr")
+library("tidyr")
+library("readr")
+library("purrr")
+```
+
+
+Next, import the csv file containing the raw data.
+
+```{r}
+stud_fitness <- read.csv("percentage-of-physically-fit-students-lghc-indicator-8.csv")
+```
+
+Let's take a look at the columns:
+
+```{r}
+stud_fitness_columns <- colnames(stud_fitness)
+```
+
+```{r}
+col_vals <- lapply(stud_fitness, unique)
+```
+
+## Cleaning up the Data
+
+Now, let's clean up the dataframe a bit so it is easier to work with.  We will do this column by column.  The last column is a warning for when the relative standard error is outside of a predetermined acceptable range.  I'm going to start by looking at this subset.
+
+```{r}
+stud_fitness_warning <- subset(stud_fitness, warning == '*')
+```
+
+Approximately 12% of the total observations have this warning.  For now, I am going to drop these rows since there is some question as to the statistical validity of these results.
+
+```{r}
+stud_fitness_revised <- subset(stud_fitness, warning != '*')
+```
+
+Next, let's:
+
+*  drop columns that are not relevant for our analysis; 
+*  rename columns to be more clear of what they refer to;
+*  revise how the years are presented to indicate the year of the test instead of the span of the school year.
+
+```{r}
+stud_fitness_revised <- subset(stud_fitness_revised, select = -c(LGHC.Indicator.Name, LCI, UCI, Stardard.Error, RSE, warning))
+```
+
+```{r}
+stud_fitness_revised <- stud_fitness_revised %>%
+ rename(
+ Grade_Level = Grade.Lev,
+ Fit_students = Numerator,
+ Tot_students = Denominator,
+ Percent_fit = Percent
+)
+```
+
+```{r}
+stud_fitness_revised$Test_Year <- substr(stud_fitness_revised$Year, start = 6, stop = 9)
+
+```
+
+```{r}
+stud_fitness_revised <- select(stud_fitness_revised, -("Year"))
+```
+
+## Visualizing the Data 
+
+Now that the data has been cleaned, some questions can be answered.  Specifically, the following questions will be investigated:
+ *  How has physical fitness of students changed over the time span of the data (grouped by grade level)?
+ *  How does physical fitness of students compare over different counties (using most recent data)?
+ 
+### Investigating Physical Fitness Over Time
+ 
+ 
+Filter the data to show the results for all students for the whole state of California, grouped by grade level. Because there is a gap in data (no test data for the year 2000), the data will be examined starting at "Test_Year" > 2000.  This will not affect the analysis, as we are looking at a general trend over time.
+ 
+```{r}
+stud_fitness_CA <- subset(stud_fitness_revised, Geography == "California" & Strata.Name == "All Students" & Test_Year > 1999)
+```
+ 
+Create a line graph of "Percent Fit" vs "Test Year"
+
+```{r}
+ggplot(data = stud_fitness_CA, aes(x = Test_Year, y = Percent_fit, color = Grade_Level, group = Grade_Level)) +
+  geom_line() +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  ggtitle("Physical Fitness in CA Students from 2001 - 2019")
+```
+
+In general, the physical fitness of CA students in grades 5, 7, and 9 increased steadily between 2001 and 2010.  Between 2010 and 2011, all grades show a sharp decrease. Further investigation would need to be completed to determine the cause.
+
+From 2011 to 2014, all of the grade levels show some improvement followed by a steady decline from 2014 through 2019.  Due to the pandemic, there has been no physical fitness testing.  My educated guess is that the decline that started in 2014 is continuing; especially, given the stay at home orders and the decline in sports activity from March 2020 to present (Jan 2022).
+
+
+
+### Investigating Physical Fitness Over Counties
+
+The next visualization will focus on the variation of physical fitness across counties in CA for 9th grade students in 2019, the most recent test year.  In order to do this, a new data frame will be created (stud_fitness_counties_gr9), filtering for the pertinent data.
+
+```{r}
+stud_fitness_counties_gr9 <- subset(stud_fitness_revised, Grade_Level == "Grade 9" & Strata.Name == "All Students" & Test_Year == 2019 & Geography != "California")
+```
+
+Some more packages will be loaded in the library to aid in creating this visualization.
+
+```{r}
+library(choroplethr)
+library(choroplethrMaps)
+library(tmap)
+library(tmaptools)
+library(leaflet)
+```
+
+To use the "choroplethr" function, the county names in our student fitness data need to be referenced to their FIPS Code, and the "Percent_fit" needs to be named "value".  
+
+CA_Codes will be the name of the table that shows the link to the county name and the FIPS Code.  Two new columns will be added to "stud_fitness_counties_gr9": region (the FIPS County Code) and value (Percent_fit).
+
+```{r}
+library(readxl)
+US_FIPS_Codes <- read_excel("US_FIPS_Codes.xls", col_names = TRUE)
+CA_Codes <- subset(US_FIPS_Codes, State == "California")
+trimws(CA_Codes$'FIPS State')
+trimws(CA_Codes$'FIPS County')
+CA_Codes$County_Codes = paste(CA_Codes$'FIPS State', CA_Codes$'FIPS County', sep = "")
+
+
+```
+
+```{r}
+stud_fitness_counties_gr9$region = CA_Codes$County_Codes
+stud_fitness_counties_gr9$value = stud_fitness_counties_gr9$Percent_fit
+
+```
+
+To make things easier, I will subset the data frame of interest to include only the 2 columns needed to create the choropleth map.
+
+```{r}
+stud_fitness_counties_gr9_rev <- stud_fitness_counties_gr9[ , c('region', 'value')]
+stud_fitness_counties_gr9_rev$region <- as.double(stud_fitness_counties_gr9_rev$region)
+county_choropleth(stud_fitness_counties_gr9_rev,
+                               title = "Variance of Physical Fitness among Grade 9 Students in 2019",
+                               legend = "Fitness Level (% fit)",
+                               num_colors = 1,
+                               state_zoom = "california"
+                        )
+```
+
+Looking at the choropleth map above, it appears as a whole the fitness of grade 9 students in California is lacking.  One aspect that I would like to work on is creating hover text to show the name and the numerical value of the fitness level for each county.
+
+
+## CONCLUSION
+
+This investigation is a first step look at the physical fitness of students in CA.  While the state has collected quite a bit of data, it does not seem that strategies have been put in place to increase the physical fitness of students (based on the physical fitness over time graph).
+
+As my very first project ever coded in R, I am pleased with the outcome.  However, I would like to continue to hone my skills by conducting other investigations, and perhaps doing a deeper dive into this dataset and answering some questions like:
+
+*  Why was there a sudden plummet in physical fitness level around 2010?
+*  Is there a difference in physical fitness by race or gender?  If so, what are those trends?
+*  Is there a correlation between physical fitness and participation level in youth sports?
+
+
+
+
