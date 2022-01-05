@@ -1,5 +1,6 @@
 # CA_Student_Fitness
 Investigation of Student Fitness in CA from 2001-2019
+Files included: RMarkdown File of Analysis; raw data from CA Dept of Education; US FIPS Codes data
 
 This investigation was completed as part of the Google Data Analytics Certificate Capstone Project.  This is my very first completely independent data investigation (sought out the data, cleaned, transformed, visualized with no guidance) and the very first time coding in R, which I just studied over a 1-week period.
 
